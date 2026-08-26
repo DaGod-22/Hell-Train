@@ -1,0 +1,26 @@
+# Build artifacts
+dist/
+build/
+out/
+coverage/
+
+# Tooling
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python (server)
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local environment
+.env
+.env.local
+
+# Generated preview PNGs (kept in repo for reference; comment out if you don't want them)
+# art/*.png
