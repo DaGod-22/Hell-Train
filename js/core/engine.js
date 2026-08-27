@@ -37,6 +37,9 @@ export class Engine {
     this.canvas.style.height = Math.floor(h) + 'px';
   }
   addScene(name, scene) { this.scenes[name] = scene; }
+  // Swap back to an already-running scene WITHOUT re-entering it
+  // (used by the pause menu so a run is never restarted by accident).
+  resumeScene(scene) { if (scene) this.current = scene; }
   setScene(name, params = {}) {
     if (this.current?.exit) this.current.exit();
     this.current = this.scenes[name];

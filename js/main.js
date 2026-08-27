@@ -5,11 +5,13 @@ import { Engine } from './core/engine.js';
 import { Input } from './core/input.js';
 import { CFG } from './core/config.js';
 import { buildSpriteRegistry } from './data/sprites.js';
+import { buildArt } from './data/art.js';
 import { loadSave, ensureShape, saveSave } from './core/save.js';
 import { SupabaseClient } from './systems/supabase.js';
 import { AudioEngine } from './systems/audio.js';
 
 import { GameplayScene } from './systems/gameplay.js';
+import { ShopScene } from './ui/shop.js';
 import {
   MenuScene, WorldMapScene, TrainBaseScene, RunSummaryScene, PauseScene,
   AchievementsScene, LeaderboardScene, DailyRunScene, WeeklyChallengeScene,
@@ -20,11 +22,27 @@ async function boot() {
   const root = document.getElementById('root');
   // Hide loading
   const loading = document.getElementById('loading');
-  loading.style.display = 'none';
+  const setStatus = (msg) => {
+    try {
+      const el = loading?.querySelector?.('.subtitle') || loading;
+      if (el) el.textContent = msg;
+    } catch {}
+  };
+
+  // ---- forge every sprite in the game at boot (procedural pixel art) ----
+  setStatus('STOKING THE FURNACE...');
+  await new Promise(r => setTimeout(r, 16));
+  const t0 = performance.now();
+  const art = buildArt();
+  const legacy = buildSpriteRegistry();
+  for (const k of Object.keys(legacy)) if (!(k in art)) art[k] = legacy[k];
+  console.log('[HELL TRAIN] art forged in ' + Math.round(performance.now() - t0) + ' ms');
+
+  if (loading?.style) loading.style.display = 'none';
 
   // Engine
   const engine = new Engine(root);
-  engine.sprites = buildSpriteRegistry();
+  engine.sprites = art;
   engine.input = new Input(engine.canvas);
   engine.audio = new AudioEngine();
   engine.supabase = new SupabaseClient();
@@ -53,7 +71,9 @@ async function boot() {
   engine.addScene('arsenal', new ArsenalScene(engine));
   engine.addScene('armoury', new ArmouryScene(engine));
   engine.addScene('relics', new RelicsScene(engine));
+  engine.addScene('shop', new ShopScene(engine));
 
+  if (typeof globalThis !== 'undefined') globalThis.__ENGINE__ = engine;
   engine.setScene('menu');
   engine.start();
 

@@ -4,6 +4,7 @@
 // All UI is drawn directly to the low-res canvas for crisp pixels.
 // ============================================================
 import { CFG, PAL, FONT } from '../core/config.js';
+import { findAscension } from '../data/upgrades.js';
 import { drawSprite, spriteCanvas } from '../core/sprite.js';
 import { RNG, dist, TAU, easeOutCubic, fmtTime, fmtNum, easeOutBack } from '../core/utils.js';
 import { REALMS, HIDDEN_REALM, BOSS_DEFS, ACHIEVEMENTS, WEEKLY_CHALLENGES, ARMOURS, RELICS, LORE, UPGRADES, EVENTS, findRealm, findDifficulty } from '../data/realms.js';
@@ -43,6 +44,23 @@ function drawBigTitle(ctx, text, x, y, scale = 1) {
   ctx.fillStyle = '#ffe066';
   ctx.fillText(text, x, y);
   ctx.textAlign = 'left';
+}
+
+// Pull the player's currently-equipped animated train from the Art Forge.
+function trainSet(engine) {
+  try { return engine.sprites?.getTrainSet?.(engine.save?.trainSkin || 'iron_horse') || null; }
+  catch { return null; }
+}
+function trainFrame(engine, t, which = 'engine') {
+  const set = trainSet(engine);
+  if (!set) return null;
+  const arr = set[which] || set.engine;
+  return arr[Math.floor(t * 8) % arr.length];
+}
+function projFrame(engine, key, t) {
+  const a = engine.sprites?.anim?.[key];
+  if (Array.isArray(a)) return a[Math.floor(t * 10) % a.length];
+  return engine.sprites?.[key] || null;
 }
 
 // =====================================================================
@@ -90,6 +108,7 @@ export class MenuScene {
     const W = CFG.VIEW_W;
     const list = [
       { label: 'PLAY', scene: 'worldMap' },
+      { label: 'THE HELL FORGE', scene: 'shop' },
       { label: 'TRAIN BASE', scene: 'trainBase' },
       { label: 'ARSENAL', scene: 'arsenal' },
       { label: 'ARMOURY', scene: 'armoury' },
@@ -149,10 +168,12 @@ export class MenuScene {
     ctx.fillText('A roguelite beyond the end of the line', W / 2, 70);
     ctx.textAlign = 'left';
     // Train silhouette background
-    const tr = this.sprites.trainEngine, car = this.sprites.trainCar;
+    const tr = trainFrame(this.engine, t) || this.sprites.trainEngine;
+    const car = trainFrame(this.engine, t, 'cargo') || this.sprites.trainCar;
     if (tr && car) {
-      drawSprite(ctx, car, W / 2 - 100, H - 50, 1, false, 0, 0.4);
-      drawSprite(ctx, tr, W / 2 + 30, H - 50, 1, false, 0, 0.5);
+      drawSprite(ctx, car, W / 2 - 110, H - 46, 1, false, 0, 0.55);
+      drawSprite(ctx, car, W / 2 - 50, H - 46, 1, false, 0, 0.55);
+      drawSprite(ctx, tr, W / 2 + 30, H - 48, 1, false, 0, 0.75);
       // Steam
       ctx.globalAlpha = 0.4;
       for (let i = 0; i < 6; i++) {
@@ -268,8 +289,8 @@ export class WorldMapScene {
     const f = (tx - idx * 60) / 60;
     const px = list[idx].x + (list[idx + 1].x - list[idx].x) * f;
     const py = list[idx].y + (list[idx + 1].y - list[idx].y) * f;
-    const tr = this.sprites.trainEngine;
-    if (tr) drawSprite(ctx, tr, px, py, 0.8, false, 0, 1);
+    const tr = trainFrame(this.engine, t) || this.sprites.trainEngine;
+    if (tr) drawSprite(ctx, tr, px, py, 0.6, false, 0, 1);
 
     // Nodes
     for (const r of list) {
@@ -300,7 +321,7 @@ export class WorldMapScene {
       const isSel = (this.engine._difficulty || 'normal') === diffs[i];
       ctx.fillStyle = isSel ? '#985ce0' : '#1a1026';
       ctx.fillRect(x0, 18, 56, 18);
-      ctx.strokeStyle = isSel ? '#ffe066' : '#3a3a4a'; ctx.lineWidth = 1; ctx.strokeRect(x0.5, 18.5, 56, 18);
+      ctx.strokeStyle = isSel ? '#ffe066' : '#3a3a4a'; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, 18.5, 56, 18);
       ctx.fillStyle = '#fff'; ctx.font = '6px monospace'; ctx.textAlign = 'center';
       ctx.fillText(diffs[i].toUpperCase(), x0 + 28, 31);
       ctx.textAlign = 'left';
@@ -382,8 +403,8 @@ export class TrainBaseScene {
     ctx.fillStyle = '#1a1026';
     ctx.fillRect(0, 0, W, H);
     // Top background train sprite
-    const tr = this.sprites.trainEngine;
-    if (tr) drawSprite(ctx, tr, W / 2 + 20, 30, 0.6, false, 0, 0.4);
+    const tr = trainFrame(this.engine, t) || this.sprites.trainEngine;
+    if (tr) drawSprite(ctx, tr, W / 2 + 20, 30, 0.5, false, 0, 0.4);
     // Back button
     const back = new Button('BACK', 6, 6, 64, 20, '#985ce0');
     back.hover = this.input.mouse.x >= 6 && this.input.mouse.x <= 70 && this.input.mouse.y >= 6 && this.input.mouse.y <= 26;
@@ -399,7 +420,7 @@ export class TrainBaseScene {
       ctx.fillStyle = sel ? '#985ce0' : '#1a1026';
       ctx.fillRect(x0, 38, 52, 18);
       ctx.strokeStyle = sel ? '#ffe066' : '#3a3a4a'; ctx.lineWidth = 1;
-      ctx.strokeRect(x0.5, 38.5, 52, 18);
+      ctx.strokeRect(x0 + 0.5, 38.5, 52, 18);
       ctx.fillStyle = sel ? '#fff' : '#cfd4e0'; ctx.font = '6px monospace'; ctx.textAlign = 'center';
       ctx.fillText(this.tabs[i].label, x0 + 26, 50);
       ctx.textAlign = 'left';
@@ -547,35 +568,125 @@ export class RunSummaryScene {
   enter(params) {
     this.params = params;
   }
+  _buttons() {
+    const W = CFG.VIEW_W, y = CFG.VIEW_H - 34, w = 128, gap = 8;
+    const total = 3 * w + 2 * gap;
+    const x0 = (W - total) / 2;
+    return [
+      { label: 'RUN IT BACK', x: x0, y, w, h: 22, act: 'retry', color: '#ff8a30' },
+      { label: 'THE HELL FORGE', x: x0 + w + gap, y, w, h: 22, act: 'shop', color: '#ffe066' },
+      { label: 'MAIN MENU', x: x0 + 2 * (w + gap), y, w, h: 22, act: 'menu', color: '#985ce0' },
+    ];
+  }
   update(dt, t) {
     this.t = t;
-    if (this.input.mouse.justDown) {
-      if (this.input.mouse.x > 130 && this.input.mouse.x < 350 &&
-          this.input.mouse.y > 200 && this.input.mouse.y < 230) {
-        this.engine.setScene('worldMap', { save: this.engine.save });
+    this.anim = Math.min(1, (this.anim || 0) + dt * 1.6);
+    const m = this.input.mouse;
+    if (m.justDown) {
+      for (const b of this._buttons()) {
+        if (m.x >= b.x && m.x <= b.x + b.w && m.y >= b.y && m.y <= b.y + b.h) {
+          if (b.act === 'retry') {
+            this.engine.setScene('gameplay', {
+              save: this.engine.save, realmId: this.params.realmId,
+              stage: this.params.stage, difficulty: this.params.difficulty || 'normal',
+            });
+          } else if (b.act === 'shop') {
+            this.engine.setScene('shop', { save: this.engine.save, from: 'menu' });
+          } else {
+            this.engine.setScene('menu', { save: this.engine.save });
+          }
+          break;
+        }
       }
     }
     this.input.mouse.justDown = false;
   }
   render(ctx, t) {
     const W = CFG.VIEW_W, H = CFG.VIEW_H;
-    ctx.fillStyle = '#080418'; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center';
-    ctx.fillText(this.params.victory ? 'STAGE CLEARED' : 'RUN ENDED', W / 2, 30);
-    ctx.font = '8px monospace';
-    const lines = [
-      'Realm: ' + (findRealm(this.params.realmId).name),
-      'Stage: ' + this.params.stage,
-      'Time: ' + fmtTime(this.params.time),
-      'Score: ' + fmtNum(this.params.runStats?.kills ? this.engine.save?.stats?.bestScore || 0 : 0),
-      'Kills: ' + (this.params.runStats?.kills || 0),
-      'Shards earned: ' + (this.params.runStats?.shards || 0),
+    const p = this.params || {};
+    const rs = p.runStats || {};
+    const k = this.anim || 0;
+    // backdrop
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, p.victory ? '#1a1030' : '#1a0a10');
+    g.addColorStop(1, '#06040c');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const rg = ctx.createRadialGradient(W / 2, 40, 4, W / 2, 40, 200);
+    rg.addColorStop(0, p.victory ? 'rgba(255,224,102,0.18)' : 'rgba(255,60,40,0.16)');
+    rg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+
+    drawBigTitle(ctx, p.victory ? 'STAGE CLEARED' : 'RUN ENDED', W / 2, 34, 0.8);
+    ctx.textAlign = 'center';
+    ctx.font = '7px monospace'; ctx.fillStyle = '#8a8aa0';
+    ctx.fillText(findRealm(p.realmId).name.toUpperCase() + '  ·  STAGE ' + (p.stage || 1) +
+      '  ·  ' + fmtTime(p.time || 0), W / 2, 50);
+
+    // stat tiles
+    const stats = [
+      ['KILLS', fmtNum(rs.kills || 0), '#ff8a30'],
+      ['LEVEL', String(p.level || 1), '#8ef0ff'],
+      ['COINS', fmtNum(p.coins || 0), '#ffe878'],
+      ['BEST COMBO', 'x' + (rs.bestCombo || 0), '#c07aff'],
+      ['DAMAGE DEALT', fmtNum(Math.round(rs.damageDealt || 0)), '#ff4d6a'],
+      ['DAMAGE TAKEN', fmtNum(Math.round(rs.damageTaken || 0)), '#9aa0b4'],
     ];
-    for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], W / 2, 60 + i * 16);
-    // Continue
-    const cb = new Button('CONTINUE', 130, 200, 220, 30, '#985ce0');
-    cb.hover = this.input.mouse.x > 130 && this.input.mouse.x < 350 && this.input.mouse.y > 200 && this.input.mouse.y < 230;
-    cb.draw(ctx);
+    const cols = 3, tw = 132, th = 34, gap = 8;
+    const x0 = (W - (cols * tw + (cols - 1) * gap)) / 2;
+    for (let i = 0; i < stats.length; i++) {
+      const c = i % cols, r = Math.floor(i / cols);
+      const x = x0 + c * (tw + gap), y = 60 + r * (th + gap);
+      const kk = Math.max(0, Math.min(1, k * 3 - i * 0.25));
+      if (kk <= 0) continue;
+      ctx.globalAlpha = kk;
+      ctx.fillStyle = 'rgba(10,8,18,0.9)'; ctx.fillRect(x, y, tw, th);
+      ctx.strokeStyle = stats[i][2]; ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, tw - 1, th - 1);
+      ctx.fillStyle = '#6b6b80'; ctx.font = '6px monospace';
+      ctx.fillText(stats[i][0], x + tw / 2, y + 11);
+      ctx.fillStyle = stats[i][2]; ctx.font = 'bold 13px monospace';
+      ctx.fillText(stats[i][1], x + tw / 2, y + 27);
+      ctx.globalAlpha = 1;
+    }
+
+    // ascensions taken
+    const owned = p.owned || {};
+    const ids = Object.keys(owned);
+    ctx.font = '6px monospace'; ctx.fillStyle = '#6b6b80';
+    ctx.fillText('ASCENSIONS TAKEN — ' + ids.length + (p.apocalypse ? '   ·   APOCALYPSE PROTOCOL ENGAGED' : ''),
+      W / 2, 156);
+    let line = ids.map(id => {
+      const a = findAscension(id);
+      return (a ? a.name : id) + (owned[id] > 1 ? ' ' + owned[id] : '');
+    }).join('  ·  ');
+    ctx.fillStyle = '#cfd4e0';
+    const chunks = [];
+    while (line.length > 74) {
+      let cut = line.lastIndexOf('·', 74);
+      if (cut < 20) cut = 74;
+      chunks.push(line.slice(0, cut)); line = line.slice(cut + 1);
+    }
+    if (line) chunks.push(line);
+    for (let i = 0; i < Math.min(3, chunks.length); i++) ctx.fillText(chunks[i].trim(), W / 2, 168 + i * 9);
+
+    // coin banner
+    ctx.fillStyle = '#ffe878'; ctx.font = 'bold 9px monospace';
+    ctx.fillText('+' + fmtNum(p.coins || 0) + ' COINS BANKED   (TOTAL ' +
+      fmtNum(this.engine.save?.coins || 0) + ')', W / 2, 204);
+
+    // buttons
+    for (const b of this._buttons()) {
+      const hover = this.input.mouse.x >= b.x && this.input.mouse.x <= b.x + b.w &&
+        this.input.mouse.y >= b.y && this.input.mouse.y <= b.y + b.h;
+      ctx.fillStyle = hover ? 'rgba(40,30,60,0.95)' : 'rgba(12,10,20,0.9)';
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.strokeStyle = b.color; ctx.lineWidth = hover ? 2 : 1;
+      ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+      ctx.fillStyle = hover ? '#ffffff' : b.color;
+      ctx.font = 'bold 8px monospace';
+      ctx.fillText(b.label, b.x + b.w / 2, b.y + 14);
+    }
+    ctx.lineWidth = 1;
     ctx.textAlign = 'left';
   }
 }
@@ -598,8 +709,9 @@ export class PauseScene {
     this.t = t;
     if (this.input.mouse.justDown) {
       const y = this.input.mouse.y;
-      if (y > 60 && y < 80) this.engine.setScene('gameplay', this.params.ctx._buildParams());
-      if (y > 90 && y < 110) this.engine.setScene('menu', { save: this.engine.save });
+      if (y > 60 && y < 80) this.engine.resumeScene(this.params.ctx);
+      if (y > 90 && y < 110) this.engine.setScene('shop', { save: this.engine.save, from: 'menu' });
+      if (y > 120 && y < 140) this.engine.setScene('menu', { save: this.engine.save });
     }
     this.input.mouse.justDown = false;
   }
@@ -610,7 +722,8 @@ export class PauseScene {
     ctx.fillText('PAUSED', W / 2, 40);
     ctx.font = '8px monospace';
     ctx.fillText('Resume', W / 2, 75);
-    ctx.fillText('Quit to Menu', W / 2, 105);
+    ctx.fillText('The Hell Forge', W / 2, 105);
+    ctx.fillText('Quit to Menu', W / 2, 135);
     ctx.textAlign = 'left';
   }
 }
@@ -909,8 +1022,8 @@ export class ArsenalScene {
       const lines = wrap(w.desc, 32);
       for (let j = 0; j < Math.min(3, lines.length); j++) ctx.fillText(lines[j], x + 6, y + 24 + j * 9);
       // orb sprite
-      const sp = this.engine.sprites[w.sprite];
-      if (sp) drawSprite(ctx, sp, x + cw - 18, y + 14, 1, false, 0, 1);
+      const sp = projFrame(this.engine, w.sprite, t);
+      if (sp) drawSprite(ctx, sp, x + cw - 18, y + 14, 1.5, false, 0, 1);
     }
   }
 }
