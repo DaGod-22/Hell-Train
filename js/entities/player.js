@@ -44,6 +44,7 @@ export class Player {
     this.omegaRound = 0; this._shotCount = 0;
     this.hellsplit = 0; this.extinction = 0; this._extinctionT = 20;
     this.freeRerolls = 0; this.startLevelBonus = 0;
+    this.aoeMult = 1; this.autoInvuln = null; this.autoDodge = null; this.screenWipe = 0;
 
     // --- progression ---
     this.xp = 0; this.level = 1; this.score = 0; this.kills = 0;
@@ -187,6 +188,25 @@ export class Player {
     if (this.apocalypseBurn) {
       this.hp -= this.maxHp * this.apocalypseBurn * dt;
       if (this.hp <= 1) this.hp = 1;
+    }
+    // periodic invulnerability window (tiered card: 'Temporal Bulwark')
+    if (this.autoInvuln) {
+      this.autoInvuln.t -= dt;
+      if (this.autoInvuln.t <= 0) {
+        this.autoInvuln.t = this.autoInvuln.cd;
+        this.invuln = Math.max(this.invuln, this.autoInvuln.dur);
+        ctx?.fx?.ring(this.x, this.y, 22, '#8ef0ff', 0.4, 3);
+        ctx?.fx?.banner?.(this.x, this.y - 26, 'PHASED', '#8ef0ff');
+      }
+    }
+    // automatic dodge pulse (tiered card)
+    if (this.autoDodge) {
+      this.autoDodge.t -= dt;
+      if (this.autoDodge.t <= 0) {
+        this.autoDodge.t = this.autoDodge.every;
+        this.invuln = Math.max(this.invuln, 0.5);
+        ctx?.fx?.afterimage?.(this.currentFrame(), this.x, this.y, 1, this.flip, '#8ef0ff', 0.3);
+      }
     }
     if (this.undyingActive) {
       this.undyingT -= dt;
@@ -397,7 +417,7 @@ export class Player {
         x: this.x, y: this.y - 4,
         vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
         life: w.projLife || 1.6, dmg, pierce: (w.pierce || 0) + this.pierceBonus,
-        explode: w.explode || omega, explodeRadius: (w.explodeRadius || 26) * (omega ? 2.4 : 1),
+        explode: w.explode || omega, explodeRadius: (w.explodeRadius || 26) * (omega ? 2.4 : 1) * (this.aoeMult || 1),
         color: omega ? '#ff2a2a' : w.color, sprite: extra.sprite || w.sprite,
         behavior: w.behavior === 'lob' ? 'lob' : 'projectile',
         owner: 'player', size: (w.projSize || 5) * (omega ? 2 : 1), family: w.family,

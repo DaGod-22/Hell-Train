@@ -16,6 +16,8 @@ export const RARITY_WEIGHT = {
 };
 export const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
+import { TIERED_ASCENSIONS } from './upgrades_bridge.js';
+
 const A = (o) => ({ target: 'player', max: 5, family: 'core', ...o });
 
 // ==================================================================
@@ -238,6 +240,13 @@ export const APOCALYPSE_CARDS = [
     desc: () => `The train fires its ultimate every 5 seconds, forever`,
     apply: (p, l, ctx) => { if (ctx?.train) ctx.train.finalStop = true; } }),
 ];
+
+// ---- fold in the tier-based card set from js/data/upgradecards.js ----
+// The bridge converts those data-only cards into applicable Ascensions,
+// including their requires-chains, so they appear in the level-up roll.
+for (const t of TIERED_ASCENSIONS) {
+  if (!ASCENSIONS.some(a => a.id === t.id)) ASCENSIONS.push(t);
+}
 
 export function apocalypseReady(owned, playerLevel) {
   if (owned.apocalypse_protocol) return false;

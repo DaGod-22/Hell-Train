@@ -5,6 +5,7 @@
 // fully animated skins for the Conductor and the Train.
 // ============================================================
 import { CHAR_SKINS, TRAIN_SKINS } from './skins.js';
+import { COIN_SHOP } from './progression.js';
 
 const T = (o) => ({ max: 10, curve: 1.55, ...o });
 
@@ -112,6 +113,45 @@ export function skinItems() {
   ];
 }
 
+// ---------------- CLASSIC COIN SHOP (js/ui/coinshop.js) ----------------
+// That shop stores ranks in save.coinShopUpgrades against the COIN_SHOP
+// tables in data/progression.js. Sum every purchased rank's value so the
+// two shops both feed the same run.
+export function coinShopValue(save, group, cat, key) {
+  const rank = (save.coinShopUpgrades || {})[key] || 0;
+  const table = COIN_SHOP?.[group]?.[cat];
+  if (!rank || !Array.isArray(table)) return 0;
+  let sum = 0;
+  for (const row of table) if (row.level <= rank) sum += row.value || 0;
+  return sum;
+}
+export function applyCoinShopToPlayer(player, save) {
+  const hp = coinShopValue(save, 'CHARACTER', 'maxHP', 'maxHP');
+  if (hp) { player.maxHp += hp; player.hp = player.maxHp; }
+  const dmg = coinShopValue(save, 'CHARACTER', 'attackDamage', 'attackDamage');
+  if (dmg) player.modMult('atkDmg', 1 + dmg);
+  const spd = coinShopValue(save, 'CHARACTER', 'attackSpeed', 'attackSpeed');
+  if (spd) player.modMult('atkSpd', 1 + spd);
+  const crit = coinShopValue(save, 'CHARACTER', 'critChance', 'critChance');
+  if (crit) player.crit += crit;
+  const dodge = coinShopValue(save, 'CHARACTER', 'dodge', 'dodge');
+  if (dodge) player.dodge = Math.min(0.6, player.dodge + dodge);
+  const cdr = coinShopValue(save, 'CHARACTER', 'cooldownReduction', 'cooldownReduction');
+  if (cdr) player.modMult('cdr', 1 + cdr);
+  return player;
+}
+export function applyCoinShopToTrain(train, save) {
+  const hp = coinShopValue(save, 'TRAIN', 'hp', 'trainHP');
+  if (hp) { train.maxHp += hp; train.hp = train.maxHp; }
+  const dmg = coinShopValue(save, 'TRAIN', 'damage', 'trainDamage');
+  if (dmg) train.dmgMul *= 1 + dmg;
+  const rate = coinShopValue(save, 'TRAIN', 'fireRate', 'trainFireRate');
+  if (rate) train.fireRate = (train.fireRate || 1) * (1 + rate);
+  const arm = coinShopValue(save, 'TRAIN', 'armour', 'trainArmour');
+  if (arm) train.armour += arm < 1 ? Math.round(arm * 20) : arm;
+  return train;
+}
+
 // ---------------- APPLY EVERYTHING TO A NEW RUN ----------------
 export function applyPermaToPlayer(player, save) {
   const lv = save.permaLevels || {};
@@ -121,6 +161,7 @@ export function applyPermaToPlayer(player, save) {
   }
   player.freeRerolls = lv.p_reroll || 0;
   player.startLevelBonus = lv.p_start_lvl || 0;
+  applyCoinShopToPlayer(player, save);
   return player;
 }
 export function applyPermaToTrain(train, save) {
@@ -129,6 +170,7 @@ export function applyPermaToTrain(train, save) {
     const l = lv[t.id] || 0;
     if (l > 0) t.apply(train, l);
   }
+  applyCoinShopToTrain(train, save);
   return train;
 }
 

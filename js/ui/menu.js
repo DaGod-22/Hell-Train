@@ -109,6 +109,8 @@ export class MenuScene {
     const list = [
       { label: 'PLAY', scene: 'worldMap' },
       { label: 'THE HELL FORGE', scene: 'shop' },
+      { label: 'QUICK PLAY', scene: 'characterSelect' },
+      { label: 'COIN SHOP', scene: 'coinShop' },
       { label: 'TRAIN BASE', scene: 'trainBase' },
       { label: 'ARSENAL', scene: 'arsenal' },
       { label: 'ARMOURY', scene: 'armoury' },

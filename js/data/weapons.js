@@ -4,6 +4,8 @@
 // Every weapon has a behaviour implemented in entities/player.js.
 // ============================================================
 
+import { EXTENDED_WEAPONS } from './weapons_bridge.js';
+
 const W = (o) => o;
 
 export const WEAPONS = [
@@ -294,6 +296,13 @@ export const CORES = [
   { id: 'void_core', name: 'Void Core', desc: 'A hole that is also a battery.', color: '#bc84f4' },
   { id: 'blood_core', name: 'Blood Core', desc: 'It beats when you kill.', color: '#ff3a4a' },
 ];
+
+// ---- fold in the extended arsenal (bombers / blasters / beams / summons) ----
+// These come from js/data/weapons_extended.js via the bridge, which converts
+// their data-only definitions into behaviours the engine can actually fire.
+for (const xw of EXTENDED_WEAPONS) {
+  if (!WEAPONS.some(w => w.id === xw.id)) WEAPONS.push(xw);
+}
 
 export function findWeapon(id) { return WEAPONS.find(w => w.id === id); }
 export function findAbility(id) { return ABILITIES.find(w => w.id === id); }

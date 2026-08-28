@@ -18,6 +18,7 @@ import { REALMS, findRealm, findDifficulty } from '../data/realms.js';
 import { ASCENSIONS, APOCALYPSE_PROTOCOL, APOCALYPSE_CARDS, RARITY_COLORS, ROMAN,
   rollCards, apocalypseReady, findAscension } from '../data/upgrades.js';
 import { applyPermaToPlayer, applyPermaToTrain } from '../data/shop.js';
+import { checkSynergies } from '../data/upgrades_bridge.js';
 import { WEAPONS, findWeapon } from '../data/weapons.js';
 import { addCoins, saveSave } from '../core/save.js';
 import { drawCard, drawPanel, drawBar, drawIcon, text, textC } from '../ui/widgets.js';
@@ -109,6 +110,7 @@ export class GameplayScene {
     this._ended = false;
     this._flash = { a: 0, color: '#ffffff' };
     this.apocalypseActive = false;
+    this._synergiesFired = {};
 
     // veteran perma: start with extra levels
     for (let i = 0; i < (this.player.startLevelBonus || 0); i++) {
@@ -215,6 +217,7 @@ export class GameplayScene {
     this._openCards();
   }
   spawnExplosion(x, y, radius, dmg, family) {
+    radius *= (this.player?.aoeMult || 1);
     const kind = family === 'ice' ? 'explIce' : family === 'void' ? 'explVoid' :
       family === 'holy' ? 'explHoly' : family === 'toxic' ? 'explToxic' : 'explFire';
     this.fx.explosion(x, y, kind, Math.max(0.5, radius / 26), {
@@ -356,6 +359,11 @@ export class GameplayScene {
   // ================================================================
   _queueLevelUp() {
     this.pendingLevelUps += 1;
+    // 'Annihilation' tiered card: every level-up wipes the screen
+    if (this.player.screenWipe > 0) {
+      this.extinctionEvent(180 * this.player.screenWipe);
+      this.fx.banner(this.player.x, this.player.y - 52, 'ANNIHILATION', '#ff2a2a');
+    }
     this.fx.banner(this.player.x, this.player.y - 34, 'LEVEL ' + this.player.level, '#8ef0ff');
     this.fx.ring(this.player.x, this.player.y, 40, '#8ef0ff', 0.5, 3);
     if (!this.cards) this._openCards();
@@ -403,6 +411,9 @@ export class GameplayScene {
     this.fx.banner(this.player.x, this.player.y - 30, c.name.toUpperCase() + ' ' + (c.max > 1 ? ROMAN[lvl] : ''),
       RARITY_COLORS[c.rarity] || '#ffffff');
     this.fx.explosion(this.player.x, this.player.y, 'explHoly', 1.4, { lightColor: RARITY_COLORS[c.rarity] });
+    // tiered-card synergies (data/upgradecards.js SYNERGY_BONUSES)
+    this._synergiesFired = this._synergiesFired || {};
+    checkSynergies(this.owned, this.player, this, this._synergiesFired);
     this.cards = null;
     this.pendingLevelUps -= 1;
     // every 4 levels also offer a new weapon if we have room

@@ -12,6 +12,8 @@ import { AudioEngine } from './systems/audio.js';
 
 import { GameplayScene } from './systems/gameplay.js';
 import { ShopScene } from './ui/shop.js';
+import { CoinShopScene } from './ui/coinshop.js';
+import { MainMenuScene } from './ui/mainmenu.js';
 import {
   MenuScene, WorldMapScene, TrainBaseScene, RunSummaryScene, PauseScene,
   AchievementsScene, LeaderboardScene, DailyRunScene, WeeklyChallengeScene,
@@ -29,15 +31,27 @@ async function boot() {
     } catch {}
   };
 
+  const setProgress = (pct) => {
+    try {
+      const fill = loading?.querySelector?.('.bar-fill');
+      if (fill) { fill.style.animation = 'none'; fill.style.width = pct + '%'; }
+    } catch {}
+  };
+
   // ---- forge every sprite in the game at boot (procedural pixel art) ----
   setStatus('STOKING THE FURNACE...');
+  setProgress(10);
   await new Promise(r => setTimeout(r, 16));
   const t0 = performance.now();
   const art = buildArt();
   const legacy = buildSpriteRegistry();
   for (const k of Object.keys(legacy)) if (!(k in art)) art[k] = legacy[k];
   console.log('[HELL TRAIN] art forged in ' + Math.round(performance.now() - t0) + ' ms');
+  setStatus('COUPLING THE CARRIAGES...');
+  setProgress(70);
 
+  setStatus('ALL ABOARD');
+  setProgress(100);
   if (loading?.style) loading.style.display = 'none';
 
   // Engine
@@ -72,6 +86,8 @@ async function boot() {
   engine.addScene('armoury', new ArmouryScene(engine));
   engine.addScene('relics', new RelicsScene(engine));
   engine.addScene('shop', new ShopScene(engine));
+  engine.addScene('coinShop', new CoinShopScene(engine));
+  engine.addScene('characterSelect', new MainMenuScene(engine));
 
   if (typeof globalThis !== 'undefined') globalThis.__ENGINE__ = engine;
   engine.setScene('menu');

@@ -96,6 +96,8 @@ const scripts = {
           [40, (e) => { const g = e.scenes.gameplay; g.player.hp = 0; g.player.alive = false; g.player.deathT = 0; }]],
   pause: [[2, (e) => e.setScene('gameplay', { save: e.save, realmId: 'purgatory', stage: 1, difficulty: 'normal' })],
           [40, (e) => e.setScene('pause', { from: 'gameplay', ctx: e.scenes.gameplay })]],
+  coinshop: [[2, (e) => e.setScene('coinShop', { save: e.save })]],
+  charsel: [[2, (e) => e.setScene('characterSelect', { save: e.save })]],
   boss: [[2, (e) => e.setScene('gameplay', { save: e.save, realmId: 'infernal', stage: 3, difficulty: 'normal' })],
          [30, (e) => e.scenes.gameplay._spawnBoss()]],
 };
