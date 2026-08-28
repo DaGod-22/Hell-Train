@@ -3,6 +3,9 @@
 // Home screen with character selection, realm select, shop
 // ============================================================
 import { CFG } from '../core/config.js';
+import { CHAR_SKINS } from '../data/skins.js';
+import { REALMS } from '../data/realms.js';
+import { saveSave } from '../core/save.js';
 
 export class MainMenuScene {
   constructor(engine) {
@@ -27,8 +30,24 @@ export class MainMenuScene {
     this.stats = { runs: 0, kills: 0, bestScore: 0 };
   }
 
-  enter() {
-    this.coins = this.engine.save?.permanentCoins || 0;
+  enter(params = {}) {
+    const save = params.save || this.engine.save;
+    this.save = save;
+    // Character roster comes from the real skin list; you can pick anything you own.
+    this.characters = CHAR_SKINS.map(sk => ({
+      id: sk.id, name: sk.name, desc: sk.desc, color: sk.pal.glow,
+      unlocked: sk.cost === 0 || (save.ownedCharSkins || []).includes(sk.id),
+    }));
+    // Realms honour the actual unlock state from the save file.
+    const unlocked = save.unlockedRealms || ['purgatory'];
+    this.realms = REALMS.map(r => ({
+      id: r.id, name: r.name, desc: r.desc, color: r.accent,
+      difficulty: r.tier, unlocked: unlocked.includes(r.id),
+    }));
+    const ci = this.characters.findIndex(c => c.id === save.charSkin);
+    if (ci >= 0) this.selectedCharacter = ci;
+    this.selectedRealm = Math.max(0, this.realms.findIndex(r => r.unlocked));
+    this.coins = save.coins || 0;
     this.stats = {
       runs: this.engine.save?.stats?.totalRuns || 0,
       kills: this.engine.save?.stats?.totalKills || 0,
@@ -42,43 +61,49 @@ export class MainMenuScene {
     const input = this.engine.input;
 
     if (this.showShop) {
-      if (input.isPressed('Escape')) this.showShop = false;
-      if (input.isPressed('KeyU')) this.shopTab = 'upgrades';
-      if (input.isPressed('KeyS')) this.shopTab = 'skins';
+      if (input.wasPressed('Escape')) this.showShop = false;
+      if (input.wasPressed('KeyU')) this.shopTab = 'upgrades';
+      if (input.wasPressed('KeyS')) this.shopTab = 'skins';
       return;
     }
 
     // Character selection
-    if (input.isPressed('ArrowLeft')) {
+    if (input.wasPressed('ArrowLeft')) {
       this.selectedCharacter = (this.selectedCharacter - 1 + this.characters.length) % this.characters.length;
     }
-    if (input.isPressed('ArrowRight')) {
+    if (input.wasPressed('ArrowRight')) {
       this.selectedCharacter = (this.selectedCharacter + 1) % this.characters.length;
     }
 
     // Realm selection
-    if (input.isPressed('ArrowUp')) {
+    if (input.wasPressed('ArrowUp')) {
       this.selectedRealm = Math.max(0, this.selectedRealm - 1);
     }
-    if (input.isPressed('ArrowDown')) {
+    if (input.wasPressed('ArrowDown')) {
       this.selectedRealm = Math.min(this.realms.length - 1, this.selectedRealm + 1);
     }
 
     // Start game
-    if (input.isPressed('Enter') || input.isPressed('Space')) {
+    if (input.wasPressed('Enter') || input.wasPressed('Space')) {
       const realm = this.realms[this.selectedRealm];
-      if (realm.unlocked) {
+      const chr = this.characters[this.selectedCharacter];
+      if (realm.unlocked && chr.unlocked) {
+        const save = this.save || this.engine.save;
+        save.charSkin = chr.id;
+        saveSave(save);
         this.engine.setScene('gameplay', {
-          character: this.characters[this.selectedCharacter],
-          realm: realm,
+          save, realmId: realm.id, stage: 1,
+          difficulty: this.engine._difficulty || 'normal',
         });
       }
     }
 
     // Open shop
-    if (input.isPressed('KeyC')) this.showShop = true;
-    if (input.isPressed('KeyL')) this.engine.setScene('leaderboards');
-    if (input.isPressed('KeyA')) this.engine.setScene('achievements');
+    if (input.wasPressed('KeyC')) this.engine.setScene('shop', { save: this.save || this.engine.save, from: 'characterSelect' });
+    if (input.wasPressed('Escape') || input.wasPressed('Backspace')) this.engine.setScene('menu', { save: this.save || this.engine.save });
+    if (input.wasPressed('KeyL')) this.engine.setScene('leaderboards');
+    if (input.wasPressed('KeyA')) this.engine.setScene('achievements');
+    input.endFrame();
   }
 
   render(ctx, t) {
@@ -186,9 +211,12 @@ export class MainMenuScene {
 
     // Character display
     const charY = y + 30;
-    this.characters.forEach((char, idx) => {
+    const cWin = 4;
+    const cStart = Math.max(0, Math.min(this.characters.length - cWin, this.selectedCharacter - 1));
+    this.characters.slice(cStart, cStart + cWin).forEach((char, i) => {
+      const idx = cStart + i;
       const isSelected = idx === this.selectedCharacter;
-      const itemY = charY + idx * 45;
+      const itemY = charY + i * 45;
 
       // Background
       ctx.fillStyle = isSelected ? '#ff5a33' : 'rgba(0, 0, 0, 0.3)';
@@ -247,9 +275,12 @@ export class MainMenuScene {
 
     // Realm display
     const realmY = y + 20;
-    this.realms.forEach((realm, idx) => {
+    const rWin = 5;
+    const rStart = Math.max(0, Math.min(this.realms.length - rWin, this.selectedRealm - 2));
+    this.realms.slice(rStart, rStart + rWin).forEach((realm, i) => {
+      const idx = rStart + i;
       const isSelected = idx === this.selectedRealm;
-      const itemY = realmY + idx * 35;
+      const itemY = realmY + i * 35;
 
       // Background
       ctx.fillStyle = isSelected ? realm.color : 'rgba(0, 0, 0, 0.3)';

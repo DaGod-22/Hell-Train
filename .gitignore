@@ -24,3 +24,10 @@ Thumbs.db
 
 # Generated preview PNGs (kept in repo for reference; comment out if you don't want them)
 # art/*.png
+
+# Node
+node_modules
+package-lock.json
+
+# Headless render output
+shots/

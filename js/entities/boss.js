@@ -84,11 +84,8 @@ export class Boss {
     // Contact damage
     const p = ctx.player;
     if (dist(this.x, this.y, p.x, p.y) < this.radius + p.radius) {
-      const dealt = p.takeDamage(this.dmg || 20);
-      if (dealt > 0) {
-        ctx.fx.flash(p.x, p.y, '#ff3a3a', 0.05);
-        ctx.fx.shakeScreen(3, 0.1);
-      }
+      const dealt = p.takeDamage((this.dmg || 20) * dt * 2.2, ctx, this);
+      if (dealt > 0) ctx.onPlayerHit(dealt, this.color);
     }
 
     // Special adds at HP thresholds (used by some bosses)
@@ -136,10 +133,7 @@ export class Boss {
       ctx.fx.shakeScreen(5, 0.2);
       ctx.fx.burst(this.x, this.y, this.color, 24, { life: 0.5, spd: 140, size: 2 });
       // AOE ring
-      for (const e of ctx.enemiesInRange(this.x, this.y, 80)) {
-        e.takeDamage(8 * this.phase, { family: 'fire' });
-      }
-      if (dist(this.x, this.y, p.x, p.y) < 80) p.takeDamage(15 * this.phase);
+      if (dist(this.x, this.y, p.x, p.y) < 80) { const d = p.takeDamage(15 * this.phase, ctx, this); if (d > 0) ctx.onPlayerHit(d, this.color); }
     } else if (id === 'projectiles') {
       const count = 6 + this.phase * 2;
       const ang0 = Math.atan2(p.y - this.y, p.x - this.x);
@@ -161,9 +155,7 @@ export class Boss {
       if (this.realmId === 'frozen') {
         // Frost nova
         ctx.fx.burst(this.x, this.y, '#a8d4f4', 32, { life: 0.6, spd: 200 });
-        for (const e of ctx.enemiesInRange(this.x, this.y, 140)) {
-          e.takeDamage(10 * this.phase, { family: 'ice', slow: 0.6, slowDur: 3 });
-        }
+        { const d = p.takeDamage(10 * this.phase, ctx, this); if (d > 0) ctx.onPlayerHit(d, '#a8d4f4'); }
       } else if (this.realmId === 'infernal') {
         // Meteor shower
         for (let i = 0; i < 5; i++) {
@@ -185,7 +177,7 @@ export class Boss {
         // Reality shift
         ctx.fx.flash(p.x, p.y, '#985ce0', 0.6);
         ctx.fx.burst(this.x, this.y, '#985ce0', 40, { life: 1.0, spd: 250 });
-        p.takeDamage(8 * this.phase);
+        { const d = p.takeDamage(8 * this.phase, ctx, this); if (d > 0) ctx.onPlayerHit(d, this.color); }
       } else if (this.realmId === 'terminus') {
         // Train echo ram
         ctx.fx.shakeScreen(6, 0.4);
@@ -203,14 +195,17 @@ export class Boss {
     }
   }
 
-  takeDamage(amount) {
-    if (!this.alive) return;
+  takeDamage(amount, opts = {}) {
+    if (!this.alive) return 0;
+    const dealt = Math.min(this.hp, amount);
     this.hp -= amount;
     this.flashT = 0.1;
+    if (opts.burn) { this.burnT = opts.burnDur || 3; this.burnDps = Math.max(this.burnDps || 0, opts.burn); }
     if (this.hp <= 0) {
       this.hp = 0;
       this.alive = false;
       this.deathT = 1.2;
     }
+    return dealt;
   }
 }

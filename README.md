@@ -1,5 +1,31 @@
 # HELL TRAIN 🚂💀 — AAA SCALE ROGUELITE
 
+> **▶ PLAY IT:** https://dagod-22.github.io/Hell-Train/
+> *(GitHub Pages — see “Deploying / Playing online” at the bottom if the link 404s.)*
+
+## ⚙️ Engine status (read me first)
+
+Everything described below is now **actually wired into the running game**, not just present as data files:
+
+| System | File | Status |
+| --- | --- | --- |
+| Procedural pixel-art forge (every sprite generated at boot) | `js/data/art.js`, `js/core/pixel.js` | live |
+| Deferred lighting + bloom + grade + CRT post pipeline | `js/core/render.js` | live |
+| Gameplay loop, wave director, elites, bosses, loot | `js/systems/gameplay.js` | live |
+| Ascension Grid + Apocalypse Protocol (level-up cards) | `js/data/upgrades.js` | live — **78 cards** |
+| Tier-based cards + synergies | `js/data/upgradecards.js` → `js/data/upgrades_bridge.js` | live — 27 folded in |
+| Weapons | `js/data/weapons.js` | live — **49 weapons** |
+| Extended arsenal (bombers/blasters/beams/summons) | `js/data/weapons_extended.js` → `js/data/weapons_bridge.js` | live — 27 folded in |
+| THE HELL FORGE (main coin shop, 26 tracks + skins) | `js/ui/shop.js`, `js/data/shop.js` | live |
+| Classic Coin Shop | `js/ui/coinshop.js`, `js/data/progression.js` | live — click to buy |
+| Quick Play character/realm select | `js/ui/mainmenu.js` | live |
+| Skins: 8 character + 8 train, fully animated | `js/data/skins.js` | live |
+
+Both shops spend the **same** coin balance (`save.coins`) and both feed the same run.
+
+---
+
+
 **ULTIMATE EDITION** — A complete, polished 2D top-down supernatural roguelite with **professional AAA-scale graphics, animations, and gameplay systems**. Hand-crafted pixel art, procedural worlds, multiple realms, and evolving combat with permanent progression.
 
 ---
@@ -311,3 +337,40 @@ MIT — Free to use, modify, and distribute.
 **Engine**: Pure JavaScript + Canvas  
 
 Made with ❤️ and pixel-perfect precision.
+
+
+---
+
+## 🚀 Deploying / Playing online
+
+The game is a plain static site — `index.html` + `css/` + `js/`, no build step.
+
+**GitHub Pages** — needs to be switched on once (30 seconds, one time only):
+
+1. Repo → **Settings** → **Pages**
+2. **Build and deployment → Source**: `Deploy from a branch`
+3. **Branch**: `arena/01a0427f-hell-train` (or `main` once this branch is merged), folder `/ (root)` → **Save**
+4. Wait ~1 minute, then open **https://dagod-22.github.io/Hell-Train/**
+
+**Locally** — any static server works (ES modules need http, not `file://`):
+
+```bash
+python3 -m http.server 5173
+# then open http://localhost:5173/
+```
+
+## 🧪 Headless verification
+
+There is no browser in CI, so rendering is verified by rasterising real frames with
+`@napi-rs/canvas`:
+
+```bash
+npm i @napi-rs/canvas
+node tools/headless.mjs 3000 myshot sim   # 50s auto-played run -> shots/myshot.png
+node tools/headless.mjs 120 shop shop     # THE HELL FORGE
+node tools/headless.mjs 120 coinshop coinshop
+node tools/headless.mjs 120 charsel charsel
+```
+
+Every scene currently renders with **0 errors**, including a 200-second auto-played run
+(1,491 kills, level 75, 43 ascensions taken).

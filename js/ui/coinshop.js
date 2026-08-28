@@ -4,6 +4,7 @@
 // ============================================================
 import { CFG } from '../core/config.js';
 import { COIN_SHOP, PROGRESSION_TIERS } from '../data/progression.js';
+import { saveSave } from '../core/save.js';
 
 export class CoinShopScene {
   constructor(engine) {
@@ -11,7 +12,7 @@ export class CoinShopScene {
     this.selectedTab = 'character';
     this.scrollOffset = 0;
     this.hoveredItem = null;
-    this.coins = engine.save?.permanentCoins || 0;
+    this.coins = engine.save?.coins || 0;
     this.upgrades = engine.save?.coinShopUpgrades || {
       maxHP: 0,
       attackDamage: 0,
@@ -29,7 +30,7 @@ export class CoinShopScene {
   }
 
   enter(params = {}) {
-    this.coins = this.engine.save?.permanentCoins || 0;
+    this.coins = this.engine.save?.coins || 0;
     this.upgrades = this.engine.save?.coinShopUpgrades || this.upgrades;
     this.selectedTab = 'character';
     this.scrollOffset = 0;
@@ -37,30 +38,80 @@ export class CoinShopScene {
   }
 
   exit() {
-    this.engine.save.permanentCoins = this.coins;
+    this.engine.save.coins = this.coins;
     this.engine.save.coinShopUpgrades = this.upgrades;
   }
 
   update(dt, t) {
     this.animationTime += dt;
     const input = this.engine.input;
+    if (this.toast) { this.toast.t -= dt; if (this.toast.t <= 0) this.toast = null; }
+    this.coins = this.engine.save?.coins || 0;
 
     // Tab switching
-    if (input.isPressed('KeyC')) this.selectedTab = 'character';
-    if (input.isPressed('KeyT')) this.selectedTab = 'train';
-    if (input.isPressed('KeyS')) this.selectedTab = 'skins';
+    if (input.wasPressed('KeyC')) this.selectedTab = 'character';
+    if (input.wasPressed('KeyT')) this.selectedTab = 'train';
+    if (input.wasPressed('KeyS')) this.selectedTab = 'skins';
 
     // Scroll
-    if (input.isPressed('ArrowUp')) this.scrollOffset = Math.max(0, this.scrollOffset - 30);
-    if (input.isPressed('ArrowDown')) this.scrollOffset += 30;
+    if (input.wasPressed('ArrowUp') || input.wasPressed('KeyW')) this.scrollOffset = Math.max(0, this.scrollOffset - 30);
+    if (input.wasPressed('ArrowDown') || input.wasPressed('KeyS')) this.scrollOffset += 30;
+
+    // Tab clicks + purchases
+    const m = input.mouse;
+    if (m.justDown) {
+      const tabWidth = CFG.VIEW_W / 3;
+      if (m.y >= 40 && m.y <= 56) {
+        const idx = Math.floor(m.x / tabWidth);
+        if (this.tabs[idx]) { this.selectedTab = this.tabs[idx]; this.scrollOffset = 0; }
+      } else {
+        for (const r of (this._rects || [])) {
+          if (m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y && m.y <= r.y + r.h) {
+            this._buy(r); break;
+          }
+        }
+      }
+    }
 
     // Back to menu
-    if (input.isPressed('Escape')) {
-      this.engine.setScene('menu');
+    if (input.wasPressed('Escape') || input.wasPressed('Backspace')) {
+      this._persist();
+      this.engine.setScene('menu', { save: this.engine.save });
     }
+    input.endFrame();
+  }
+
+  _persist() {
+    this.engine.save.coins = this.coins;
+    this.engine.save.coinShopUpgrades = this.upgrades;
+    saveSave(this.engine.save);
+  }
+
+  _say(msg, color) { this.toast = { msg, color, t: 1.5 }; }
+
+  _buy(r) {
+    const save = this.engine.save;
+    if (r.kind === 'skin') {
+      save.ownedSkins = save.ownedSkins || {};
+      if (save.ownedSkins[r.skin.key]) return this._say('ALREADY OWNED', '#00ff41');
+      if (this.coins < r.skin.cost) return this._say('NOT ENOUGH COINS', '#ff3344');
+      this.coins -= r.skin.cost;
+      save.ownedSkins[r.skin.key] = true;
+      this._say('UNLOCKED ' + r.skin.label.toUpperCase(), '#ffd700');
+    } else {
+      const owned = this.upgrades[r.key] || 0;
+      if (r.upgrade.level <= owned) return this._say('ALREADY OWNED', '#00aa00');
+      if (r.upgrade.level !== owned + 1) return this._say('BUY THE PREVIOUS RANK FIRST', '#ff3344');
+      if (this.coins < r.upgrade.cost) return this._say('NOT ENOUGH COINS', '#ff3344');
+      this.coins -= r.upgrade.cost;
+      this.upgrades[r.key] = r.upgrade.level;
+      this._say(r.upgrade.label.toUpperCase() + ' PURCHASED', '#00ff41');
+    }
+    this._persist();
   }
 
   render(ctx, t) {
+    this._rects = [];
     // Clear background
     ctx.fillStyle = '#0a0420';
     ctx.fillRect(0, 0, CFG.VIEW_W, CFG.VIEW_H);
@@ -93,7 +144,17 @@ export class CoinShopScene {
     ctx.fillStyle = '#b0b0ff';
     ctx.font = '6px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('[C]haracter [T]rain [S]kins | [↑↓] Scroll | [ESC] Back', CFG.VIEW_W / 2, CFG.VIEW_H - 5);
+    ctx.fillText('CLICK TO BUY | [C]haracter [T]rain [S]kins | [↑↓] Scroll | [ESC] Back', CFG.VIEW_W / 2, CFG.VIEW_H - 5);
+    if (this.toast) {
+      ctx.globalAlpha = Math.min(1, this.toast.t * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.85)';
+      ctx.fillRect(CFG.VIEW_W / 2 - 90, CFG.VIEW_H - 32, 180, 14);
+      ctx.strokeStyle = this.toast.color; ctx.lineWidth = 1;
+      ctx.strokeRect(CFG.VIEW_W / 2 - 90, CFG.VIEW_H - 32, 180, 14);
+      ctx.fillStyle = this.toast.color; ctx.font = 'bold 7px monospace'; ctx.textAlign = 'center';
+      ctx.fillText(this.toast.msg, CFG.VIEW_W / 2, CFG.VIEW_H - 22);
+      ctx.globalAlpha = 1;
+    }
   }
 
   renderTabs(ctx, t) {
@@ -143,6 +204,7 @@ export class CoinShopScene {
   }
 
   renderCharacterUpgrades(ctx, t, startY) {
+    ctx.textAlign = 'left';
     const categories = ['maxHP', 'attackDamage', 'attackSpeed', 'critChance', 'dodge', 'cooldownReduction'];
     const itemWidth = CFG.VIEW_W / 2 - 6;
     let y = startY - this.scrollOffset;
@@ -176,6 +238,7 @@ export class CoinShopScene {
   }
 
   renderTrainUpgrades(ctx, t, startY) {
+    ctx.textAlign = 'left';
     const categories = ['hp', 'damage', 'fireRate', 'armour'];
     const itemWidth = CFG.VIEW_W / 2 - 6;
     let y = startY - this.scrollOffset;
@@ -201,7 +264,7 @@ export class CoinShopScene {
 
         if (itemY < startY - 30 || itemY > startY + 250) return;
 
-        this.renderUpgradeCard(ctx, t, x, itemY, itemWidth, upgrade, `train_${cat}`);
+        this.renderUpgradeCard(ctx, t, x, itemY, itemWidth, upgrade, 'train' + cat.charAt(0).toUpperCase() + cat.slice(1));
       });
 
       y += Math.ceil(upgrades.length / 2) * 28 + 8;
@@ -209,6 +272,7 @@ export class CoinShopScene {
   }
 
   renderSkins(ctx, t, startY) {
+    ctx.textAlign = 'left';
     const types = ['character', 'train'];
     let y = startY - this.scrollOffset;
 
@@ -242,6 +306,7 @@ export class CoinShopScene {
 
   renderUpgradeCard(ctx, t, x, y, w, upgrade, key) {
     const owned = this.upgrades[key] || 0;
+    if (y > 55 && y < CFG.VIEW_H - 14) this._rects.push({ x, y, w, h: 24, upgrade, key, kind: 'upgrade' });
     const canAfford = this.coins >= upgrade.cost;
     const isMaxed = owned >= upgrade.level;
 
@@ -282,10 +347,12 @@ export class CoinShopScene {
     } else {
       ctx.fillText(`${upgrade.cost} COINS`, x + w - 2, y + 20);
     }
+    ctx.textAlign = 'left';
   }
 
   renderSkinCard(ctx, t, x, y, w, skin) {
     const owned = this.engine.save?.ownedSkins?.[skin.key] || false;
+    if (y > 55 && y < CFG.VIEW_H - 14) this._rects.push({ x, y, w, h: 24, skin, kind: 'skin' });
     const canAfford = this.coins >= skin.cost;
 
     // Card background
@@ -325,5 +392,6 @@ export class CoinShopScene {
     } else {
       ctx.fillText(`${skin.cost} COINS`, x + w - 2, y + 20);
     }
+    ctx.textAlign = 'left';
   }
 }
